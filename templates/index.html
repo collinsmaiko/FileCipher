@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Send file · FileShare Pro{% endblock %}
+
+{% block content %}
+<section class="card">
+    <h1>Send a file</h1>
+    <p class="sub">
+        Upload any file and choose your own secure access code.
+    </p>
+
+    <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="form">
+        <label for="file">Choose file</label>
+        <input type="file" id="file" name="file" required>
+
+        <label for="code">Your access code (16 characters A–Z / 0–9)</label>
+        <input type="text" id="code" name="code" required minlength="4" maxlength="32"
+            placeholder="e.g. MYSECURECODE1234">
+
+        <button type="submit" class="btn-primary">
+            Upload &amp; save with my code
+        </button>
+    </form>
+
+    <p class="hint">
+        Use a strong code; anyone with this code can download your file.
+    </p>
+</section>
+{% endblock %}
