@@ -56,7 +56,7 @@ body {
     font-size: 1.4rem;
     font-weight: 600;
     letter-spacing: 0.08em;
-    text-transform: uppercase;
+    text-transform: capitalize;
     display: flex;
     align-items: flex-end;
     gap: 5px;
@@ -307,5 +307,126 @@ a.btn-secondary {
 
     .nav-links a {
         font-size: 0.85rem;
+    }
+}
+
+
+
+
+
+/* ===============================
+FileCipher Dashboard Styling
+=================================*/
+
+.admin-wrapper {
+    max-width: 1100px;
+    margin: 40px auto;
+    padding: 20px;
+}
+
+.page-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: #24292f;
+}
+
+.page-subtitle {
+    color: #57606a;
+    margin-bottom: 30px;
+}
+
+/* ===== Stats Layout ===== */
+
+.stats-grid {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 30px;
+}
+
+/* Cards */
+.stat-box {
+    flex: 1;
+    min-width: 260px;
+    background: #ffffff;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    padding: 24px;
+    transition: all 0.2s ease;
+}
+
+.stat-box:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #57606a;
+}
+
+.stat-box h2 {
+    margin-top: 10px;
+    font-size: 32px;
+    color: #0969da;
+}
+
+/* ===== Table ===== */
+
+.admin-card {
+    background: white;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    padding: 20px;
+    overflow-x: auto;
+}
+
+.admin-card h3 {
+    color: black;
+}
+
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.stats-table th {
+    text-align: left;
+    padding: 14px;
+    background: #f6f8fa;
+    border-bottom: 1px solid #d0d7de;
+    color: rgb(35, 35, 35);
+}
+
+.stats-table td {
+    padding: 14px;
+    border-bottom: 1px solid #eaeef2;
+    color: rgb(96, 96, 96);
+}
+
+.stats-table tr:hover {
+    background: #f6f8fa;
+}
+
+/* ===== Mobile ===== */
+
+@media (max-width: 768px) {
+
+    .stats-grid {
+        flex-direction: column;
+    }
+
+    .stat-box {
+        width: 100%;
+    }
+
+    .page-title {
+        text-align: center;
+        font-size: 24px;
+    }
+
+    .page-subtitle {
+        text-align: center;
     }
 }

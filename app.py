@@ -19,6 +19,9 @@ app = Flask(__name__)
 # Strong secret key for sessions (for production, set via env var)
 app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
+# Admin password for stats page
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or "MySecretPassword123"
+
 # Max upload size (100 MB)
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 
@@ -39,6 +42,24 @@ def get_db():
     conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
     conn.row_factory = sqlite3.Row
     return conn
+
+# ---------- downloads table ----------
+def create_downloads_table():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS downloads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id INTEGER,
+            ip TEXT,
+            downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Call it once at startup
+create_downloads_table()
 
 
 # ---------- file validation ----------
@@ -308,6 +329,41 @@ def receive():
     return render_template("receive.html", file=file_record)
 
 
+# @app.route("/download/<int:file_id>/<code>")
+# def download(file_id, code):
+#     ip = request.remote_addr or "unknown"
+
+#     if is_locked(ip):
+#         return "Access locked for this IP. Try again in 1 hour.", 429
+
+#     conn = get_db()
+#     cur = conn.cursor()
+#     cur.execute(
+#         "SELECT code, filename, mimetype, data FROM files WHERE id = ?",
+#         (file_id,),
+#     )
+#     row = cur.fetchone()
+#     conn.close()
+
+#     if not row:
+#         abort(404, description="File not found.")
+
+#     if row["code"] != code.upper():
+#         update_attempts(ip, success=False)
+#         abort(403, description="Invalid code for this file.")
+
+#     update_attempts(ip, success=True)
+
+#     return send_file(
+#         BytesIO(row["data"]),
+#         as_attachment=True,
+#         download_name=row["filename"],
+#         mimetype=row["mimetype"],
+#         max_age=0,
+#         conditional=True,
+#     )
+
+
 @app.route("/download/<int:file_id>/<code>")
 def download(file_id, code):
     ip = request.remote_addr or "unknown"
@@ -322,14 +378,23 @@ def download(file_id, code):
         (file_id,),
     )
     row = cur.fetchone()
-    conn.close()
 
     if not row:
+        conn.close()
         abort(404, description="File not found.")
 
     if row["code"] != code.upper():
+        conn.close()
         update_attempts(ip, success=False)
         abort(403, description="Invalid code for this file.")
+
+    # ✅ Log successful download
+    cur.execute(
+        "INSERT INTO downloads (file_id, ip) VALUES (?, ?)",
+        (file_id, ip)
+    )
+    conn.commit()
+    conn.close()
 
     update_attempts(ip, success=True)
 
@@ -341,6 +406,38 @@ def download(file_id, code):
         max_age=0,
         conditional=True,
     )
+
+
+@app.route("/admin/stats")
+def admin_stats():
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM files")
+    total_uploads = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM attempts")
+    total_attempts = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM downloads")
+    total_downloads = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT ip, COUNT(*) as cnt FROM downloads
+        GROUP BY ip ORDER BY cnt DESC LIMIT 5
+    """)
+    top_ips = [(row["ip"], row["cnt"]) for row in cur.fetchall()]
+
+    conn.close()
+
+    return render_template(
+        "admin_stats.html",
+        total_uploads=total_uploads,
+        total_attempts=total_attempts,
+        total_downloads=total_downloads,
+        top_ips=top_ips
+    )
+
 
 
 if __name__ == "__main__":

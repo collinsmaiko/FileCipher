@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="admin-wrapper">
+
+    <div class="admin-header">
+        <h1>FileCipher Admin</h1>
+        <p class="admin-subtitle">Application usage overview</p>
+    </div>
+
+    <div class="stats-grid">
+
+        <div class="stat-box">
+            <span class="stat-label">Total Uploads</span>
+            <h2>{{ total_uploads }}</h2>
+        </div>
+
+        <div class="stat-box">
+            <span class="stat-label">Failed Attempts</span>
+            <h2>{{ total_attempts }}</h2>
+        </div>
+
+        <div class="stat-box">
+            <span class="stat-label">Downloads</span>
+            <h2>{{ total_downloads }}</h2>
+        </div>
+
+    </div>
+
+    <div class="admin-card">
+        <h3>Top Active IP Addresses</h3>
+
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>Downloads</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ip, count in top_ips %}
+                <tr>
+                    <td>{{ ip }}</td>
+                    <td>{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}
