@@ -1,6 +1,14 @@
 {
     "cSpell.words": [
+        "colorama",
         "DECLTYPES",
-        "MYSECURECODE"
+        "gunicorn",
+        "itsdangerous",
+        "MYSECURECODE",
+        "noplaylist",
+        "outtmpl",
+        "pycache",
+        "venv",
+        "Werkzeug"
     ]
 }

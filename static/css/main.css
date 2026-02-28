@@ -51,6 +51,7 @@ Top nav
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap; /* allow wrapping on mobile */
 }
 
 .brand {
@@ -180,9 +181,7 @@ input[type="file"]::file-selector-button {
 
 input[type="file"]:hover,
 input[type="text"]:hover,
-input[type="url"]:hover {
-    border-color: var(--accent);
-}
+input[type="url"]:hover { border-color: var(--accent); }
 
 input[type="file"]:focus,
 input[type="text"]:focus,
@@ -284,6 +283,19 @@ Mobile adjustments
     .shell { padding-inline: 1.2rem; padding-top: 1.6rem; padding-bottom: 1.6rem; }
     .card { padding-inline: 1.5rem; }
     .nav-links a { font-size: 0.85rem; }
+
+    /* Move nav buttons below logo */
+    .top-nav {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    .nav-links {
+        flex-direction: column;
+        width: 100%;
+        gap: 0.8rem;
+        margin-left: 0;
+    }
 }
 
 /* ====================
@@ -347,9 +359,7 @@ Dashboard Styles
 
 .stats-table tr:hover { background: #f6f8fa; }
 
-/* ====================
-Top IPs flex container
-==================== */
+/* Top IPs container flex */
 .top-ips-container {
     display: flex;
     gap: 20px;
@@ -362,9 +372,7 @@ Top IPs flex container
     min-width: 300px;
 }
 
-/* ====================
-Mobile flex adjustments
-==================== */
+/* Mobile flex adjustments */
 @media (max-width: 768px) {
     .stats-grid { flex-direction: column; }
     .stat-box { width: 100%; }
@@ -394,9 +402,7 @@ Circular Centered Loader
     height: 140px;
 }
 
-.progress-ring {
-    transform: rotate(-90deg);
-}
+.progress-ring { transform: rotate(-90deg); }
 
 .progress-ring__circle {
     transition: 0.35s stroke-dashoffset;
