@@ -1,13 +1,18 @@
 import os
 import sqlite3
 import secrets
+import yt_dlp
+import glob
+import threading
+import time
 import string
+import uuid
 from datetime import datetime, timedelta
 from io import BytesIO
 
 from flask import (
     Flask, render_template, request, redirect,
-    url_for, flash, send_file, abort
+    url_for, flash, send_file, abort, jsonify
 )
 from werkzeug.utils import secure_filename
 
@@ -413,6 +418,7 @@ def admin_stats():
     conn = get_db()
     cur = conn.cursor()
 
+    # Existing stats
     cur.execute("SELECT COUNT(*) FROM files")
     total_uploads = cur.fetchone()[0]
 
@@ -428,6 +434,16 @@ def admin_stats():
     """)
     top_ips = [(row["ip"], row["cnt"]) for row in cur.fetchall()]
 
+    # NEW: TikTok stats
+    cur.execute("SELECT COUNT(*) FROM tiktok_downloads")
+    total_tiktok_downloads = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT ip, COUNT(*) as cnt FROM tiktok_downloads
+        GROUP BY ip ORDER BY cnt DESC LIMIT 5
+    """)
+    top_tiktok_ips = [(row["ip"], row["cnt"]) for row in cur.fetchall()]
+
     conn.close()
 
     return render_template(
@@ -435,10 +451,168 @@ def admin_stats():
         total_uploads=total_uploads,
         total_attempts=total_attempts,
         total_downloads=total_downloads,
-        top_ips=top_ips
+        top_ips=top_ips,
+        total_tiktok_downloads=total_tiktok_downloads,
+        top_tiktok_ips=top_tiktok_ips,
+        now=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     )
 
 
+DOWNLOAD_FOLDER = "downloads"
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+
+# Store progress by a temporary key
+download_progress = {}
+download_files ={}
+
+
+def download_video_thread(video_url, download_id):
+    try:
+        ydl_opts = {
+            "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(title)s.%(ext)s"),
+            "format": "mp4",
+            "noplaylist": True,
+            "progress_hooks": [lambda d: download_progress.update({
+                download_id: int(d.get('downloaded_bytes',0)/max(1,d.get('total_bytes',1))*100)
+            }) if d['status']=='downloading' else download_progress.update({download_id:100})],
+            "force_generic_extractor": True
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=True)
+            filename = ydl.prepare_filename(info)
+            download_files[download_id] = filename
+    except Exception as e:
+        download_progress[download_id] = -1  # error
+
+
+
+@app.route("/start_import", methods=["POST"])
+def start_import():
+    video_url = request.form.get("video_url")
+    if not video_url:
+        return jsonify({"error":"No URL"}),400
+
+    download_id = str(uuid.uuid4())
+    download_progress[download_id] = 0
+    threading.Thread(target=download_video_thread, args=(video_url, download_id)).start()
+    return jsonify({"download_id": download_id})
+
+@app.route("/progress/<download_id>")
+def progress(download_id):
+    percent = download_progress.get(download_id, 0)
+    return jsonify({"percent": percent})
+
+@app.route("/download_file/<int:download_id>")
+def download_file(download_id):
+    """
+    Unified download route for:
+    1. Regular files stored in `download_files` dict or DB
+    2. TikTok downloaded files tracked in `tiktok_download_temp`
+    """
+    ip = request.remote_addr or "unknown"
+
+    # ----------- Check regular files first -----------
+    path = download_files.get(str(download_id))  # make sure key is string if using dict
+    if path:
+        return send_file(path, as_attachment=True)
+
+    # ----------- Check TikTok downloads -----------
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT video_url, local_path FROM tiktok_download_temp WHERE id = ?",
+        (download_id,)
+    )
+    row = cur.fetchone()
+
+    if not row:
+        conn.close()
+        abort(404, description="File or video not found.")
+
+    video_url, local_path = row["video_url"], row["local_path"]
+
+    # Log TikTok download
+    cur.execute(
+        "INSERT INTO tiktok_downloads (video_url, ip) VALUES (?, ?)",
+        (video_url, ip)
+    )
+    conn.commit()
+    conn.close()
+
+    return send_file(local_path, as_attachment=True)
+
+
+@app.route("/import", methods=["GET", "POST"])
+def import_video():
+    if request.method == "POST":
+        video_url = request.form.get("video_url", "").strip()
+        if not video_url:
+            return render_template("import_video.html", error="Please enter a valid TikTok link.")
+
+        # Strip query parameters
+        from urllib.parse import urlparse
+        parsed = urlparse(video_url)
+        video_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+        # Unique ID for this download
+        download_id = str(uuid.uuid4())
+        download_progress[download_id] = 0
+
+        def progress_hook(d):
+            if d['status'] == 'downloading':
+                total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate')
+                downloaded = d.get('downloaded_bytes', 0)
+                if total_bytes:
+                    download_progress[download_id] = int(downloaded / total_bytes * 100)
+            elif d['status'] == 'finished':
+                download_progress[download_id] = 100
+
+        ydl_opts = {
+            "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(title)s.%(ext)s"),
+            "format": "mp4",
+            "noplaylist": True,
+            "http_chunk_size": 0,
+            "compat_opts": ["no-keep-fragments"],
+            "force_generic_extractor": True,
+            "progress_hooks": [progress_hook]
+        }
+
+        # Run yt-dlp synchronously (for demo) — in production use background thread
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=True)
+                filename = ydl.prepare_filename(info)
+        except Exception as e:
+            return render_template("import_video.html", error=f"Failed to download video. {e}")
+
+        # Once done, serve file
+        return send_file(filename, as_attachment=True)
+
+    return render_template("import_video.html")
+
+def cleanup_downloads():
+    now = time.time()
+    for f in glob.glob("downloads/*"):
+        if os.stat(f).st_mtime < now - 3600:  # older than 1 hour
+            os.remove(f)
+
+
+def create_tiktok_downloads_table():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS tiktok_downloads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            video_url TEXT,
+            ip TEXT,
+            downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Call it once at startup
+create_tiktok_downloads_table()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=tuple)

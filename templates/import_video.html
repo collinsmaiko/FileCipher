@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Import TikTok Video · FileCipher Pro{% endblock %}
+
+{% block content %}
+<section class="card">
+    <h1>Import TikTok Video</h1>
+
+    <p class="sub">
+        Paste a TikTok video link and download the video.
+    </p>
+
+    <form id="importForm" method="post">
+        <label for="video_url">TikTok Video Link</label>
+        <input type="url" id="video_url" name="video_url" placeholder="https://www.tiktok.com/..." required>
+        <button type="submit" class="btn-primary">Import Video</button>
+    </form>
+
+    <div id="loader" style="display:none;">
+        <div class="circle-loader">
+            <svg class="progress-ring" width="120" height="120">
+                <circle class="progress-ring__circle" stroke="var(--accent-strong)" stroke-width="8" fill="transparent" r="52" cx="60" cy="60"/>
+            </svg>
+            <div class="percent-text"><span id="percent">0</span>%</div>
+        </div>
+    </div>
+
+    <p class="hint">
+        The video will be downloaded exactly as provided.
+    </p>
+</section>
+
+<script>
+    const form = document.getElementById("importForm");
+const loader = document.getElementById("loader");
+const percentText = document.getElementById("percent");
+const circle = document.querySelector(".progress-ring__circle");
+
+const radius = circle.r.baseVal.value;
+const circumference = 2 * Math.PI * radius;
+
+circle.style.strokeDasharray = `${circumference} ${circumference}`;
+circle.style.strokeDashoffset = circumference;
+
+function setProgress(percent) {
+    const offset = circumference - (percent / 100) * circumference;
+    circle.style.strokeDashoffset = offset;
+    percentText.textContent = percent;
+}
+
+form.addEventListener("submit", function(e){
+    e.preventDefault();
+    loader.style.display = "flex";
+
+    const url = form.video_url.value;
+
+    fetch("/start_import", {
+        method: "POST",
+        body: new URLSearchParams({video_url: url})
+    }).then(res=>res.json())
+        .then(data=>{
+            const id = data.download_id;
+            const interval = setInterval(()=>{
+                fetch(`/progress/${id}`)
+                    .then(res=>res.json())
+                    .then(p=>{
+                        if(p.percent==-1){
+                            alert("Download failed.");
+                            clearInterval(interval);
+                            loader.style.display = "none";
+                            return;
+                        }
+                        setProgress(p.percent);
+
+                        if(p.percent>=100){
+                            clearInterval(interval);
+                            // download automatically
+                            const a = document.createElement("a");
+                            a.href = `/download_file/${id}`;
+                            a.download = "video.mp4";
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            loader.style.display = "none";
+                        }
+                    })
+            },500);
+        })
+});
+</script>
+{% endblock %}
