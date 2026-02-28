@@ -615,4 +615,4 @@ def create_tiktok_downloads_table():
 create_tiktok_downloads_table()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=tuple)
+    app.run(host="0.0.0.0", port=5000, debug=True)
