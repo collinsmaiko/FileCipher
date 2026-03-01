@@ -2,6 +2,7 @@
     "cSpell.words": [
         "colorama",
         "DECLTYPES",
+        "filecipher",
         "gunicorn",
         "itsdangerous",
         "MYSECURECODE",

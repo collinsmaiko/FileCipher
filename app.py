@@ -4,9 +4,12 @@ import secrets
 import yt_dlp
 import glob
 import threading
+import sqlite3
 import time
 import string
 import uuid
+from pathlib import Path
+from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from io import BytesIO
 
@@ -418,54 +421,67 @@ def admin_stats():
     conn = get_db()
     cur = conn.cursor()
 
-    # Existing stats
-    cur.execute("SELECT COUNT(*) FROM files")
-    total_uploads = cur.fetchone()[0]
+    # Total TikTok downloads
+    cur.execute("SELECT COUNT(*) as total FROM tiktok_downloads")
+    total_tiktok_downloads = cur.fetchone()["total"]
 
-    cur.execute("SELECT COUNT(*) FROM attempts")
-    total_attempts = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM downloads")
-    total_downloads = cur.fetchone()[0]
-
+    # Top TikTok IPs
     cur.execute("""
-        SELECT ip, COUNT(*) as cnt FROM downloads
-        GROUP BY ip ORDER BY cnt DESC LIMIT 5
+        SELECT ip, COUNT(*) as count
+        FROM tiktok_downloads
+        GROUP BY ip
+        ORDER BY count DESC
+        LIMIT 10
     """)
-    top_ips = [(row["ip"], row["cnt"]) for row in cur.fetchall()]
-
-    # NEW: TikTok stats
-    cur.execute("SELECT COUNT(*) FROM tiktok_downloads")
-    total_tiktok_downloads = cur.fetchone()[0]
-
-    cur.execute("""
-        SELECT ip, COUNT(*) as cnt FROM tiktok_downloads
-        GROUP BY ip ORDER BY cnt DESC LIMIT 5
-    """)
-    top_tiktok_ips = [(row["ip"], row["cnt"]) for row in cur.fetchall()]
+    top_tiktok_ips = [(row["ip"], row["count"]) for row in cur.fetchall()]
 
     conn.close()
 
     return render_template(
         "admin_stats.html",
-        total_uploads=total_uploads,
-        total_attempts=total_attempts,
-        total_downloads=total_downloads,
-        top_ips=top_ips,
+        total_uploads=0,
+        total_attempts=0,
+        total_downloads=0,
         total_tiktok_downloads=total_tiktok_downloads,
+        top_ips=[],
         top_tiktok_ips=top_tiktok_ips,
         now=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     )
 
-
 DOWNLOAD_FOLDER = "downloads"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-# Store progress by a temporary key
+# Track progress and downloaded files
 download_progress = {}
-download_files ={}
+download_files = {}
+
+# --- DATABASE SETUP ---
+DB_PATH = "filecipher.db"
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
+def create_tables():
+    conn = get_db()
+    cur = conn.cursor()
+    # Table to log every TikTok download
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS tiktok_downloads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            video_url TEXT,
+            ip TEXT,
+            downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+create_tables()
+
+# --- VIDEO DOWNLOAD THREAD ---
 def download_video_thread(video_url, download_id):
     try:
         ydl_opts = {
@@ -484,64 +500,58 @@ def download_video_thread(video_url, download_id):
     except Exception as e:
         download_progress[download_id] = -1  # error
 
-
-
+# --- START IMPORT ---
 @app.route("/start_import", methods=["POST"])
 def start_import():
     video_url = request.form.get("video_url")
     if not video_url:
-        return jsonify({"error":"No URL"}),400
+        return jsonify({"error":"No URL"}), 400
 
     download_id = str(uuid.uuid4())
     download_progress[download_id] = 0
     threading.Thread(target=download_video_thread, args=(video_url, download_id)).start()
     return jsonify({"download_id": download_id})
 
+# --- PROGRESS API ---
 @app.route("/progress/<download_id>")
 def progress(download_id):
     percent = download_progress.get(download_id, 0)
     return jsonify({"percent": percent})
 
-@app.route("/download_file/<int:download_id>")
+
+# --- DOWNLOAD FILE ---
+@app.route("/download_file/<download_id>")
 def download_file(download_id):
-    """
-    Unified download route for:
-    1. Regular files stored in `download_files` dict or DB
-    2. TikTok downloaded files tracked in `tiktok_download_temp`
-    """
     ip = request.remote_addr or "unknown"
 
-    # ----------- Check regular files first -----------
-    path = download_files.get(str(download_id))  # make sure key is string if using dict
-    if path:
-        return send_file(path, as_attachment=True)
+    path = download_files.get(download_id)
+    if path and os.path.exists(path):
+        file_path = Path(path).resolve()
+        safe_name = secure_filename(file_path.name)
 
-    # ----------- Check TikTok downloads -----------
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT video_url, local_path FROM tiktok_download_temp WHERE id = ?",
-        (download_id,)
-    )
-    row = cur.fetchone()
-
-    if not row:
+        # --- LOG THE DOWNLOAD ---
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO tiktok_downloads (video_url, ip) VALUES (?, ?)",
+            (file_path.name, ip)
+        )
+        conn.commit()
         conn.close()
-        abort(404, description="File or video not found.")
 
-    video_url, local_path = row["video_url"], row["local_path"]
-
-    # Log TikTok download
-    cur.execute(
-        "INSERT INTO tiktok_downloads (video_url, ip) VALUES (?, ?)",
-        (video_url, ip)
-    )
-    conn.commit()
-    conn.close()
-
-    return send_file(local_path, as_attachment=True)
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=safe_name,
+            mimetype="video/mp4",
+            conditional=True,
+            max_age=0
+        )
+    else:
+        abort(404, description="File not found.")
 
 
+# ---------- Import video page ----------
 @app.route("/import", methods=["GET", "POST"])
 def import_video():
     if request.method == "POST":
@@ -549,12 +559,10 @@ def import_video():
         if not video_url:
             return render_template("import_video.html", error="Please enter a valid TikTok link.")
 
-        # Strip query parameters
         from urllib.parse import urlparse
         parsed = urlparse(video_url)
         video_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
-        # Unique ID for this download
         download_id = str(uuid.uuid4())
         download_progress[download_id] = 0
 
@@ -577,42 +585,33 @@ def import_video():
             "progress_hooks": [progress_hook]
         }
 
-        # Run yt-dlp synchronously (for demo) — in production use background thread
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
                 filename = ydl.prepare_filename(info)
+                download_files[download_id] = filename
+                download_progress[download_id] = 100
         except Exception as e:
             return render_template("import_video.html", error=f"Failed to download video. {e}")
 
-        # Once done, serve file
-        return send_file(filename, as_attachment=True)
+        return send_file(
+            Path(filename).resolve(),
+            as_attachment=True,
+            download_name=secure_filename(Path(filename).name),
+            mimetype="video/mp4",
+            conditional=True,
+            max_age=0
+        )
 
     return render_template("import_video.html")
 
+# --- CLEANUP OLD DOWNLOADS ---
 def cleanup_downloads():
     now = time.time()
-    for f in glob.glob("downloads/*"):
+    for f in glob.glob(os.path.join(DOWNLOAD_FOLDER, "*")):
         if os.stat(f).st_mtime < now - 3600:  # older than 1 hour
             os.remove(f)
 
-
-def create_tiktok_downloads_table():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS tiktok_downloads (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            video_url TEXT,
-            ip TEXT,
-            downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-# Call it once at startup
-create_tiktok_downloads_table()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
