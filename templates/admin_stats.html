@@ -46,12 +46,18 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for ip, count in top_ips %}
-                    <tr>
-                        <td>{{ ip }}</td>
-                        <td>{{ count }}</td>
-                    </tr>
-                    {% endfor %}
+                    {% if top_ips %}
+                        {% for ip, count in top_ips %}
+                        <tr>
+                            <td>{{ ip }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="2">No file downloads yet</td>
+                        </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
@@ -67,12 +73,18 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for ip, count in top_tiktok_ips %}
-                    <tr>
-                        <td>{{ ip }}</td>
-                        <td>{{ count }}</td>
-                    </tr>
-                    {% endfor %}
+                    {% if top_tiktok_ips %}
+                        {% for ip, count in top_tiktok_ips %}
+                        <tr>
+                            <td>{{ ip }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="2">No TikTok downloads yet</td>
+                        </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
