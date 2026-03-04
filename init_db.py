@@ -1,39 +1,10 @@
-import sqlite3
+from app import create_app
+from app.extensions import init_db
 
-DB_PATH = "database.db"
 
-conn = sqlite3.connect(DB_PATH)
-c = conn.cursor()
+app = create_app()
 
-c.execute("DROP TABLE IF EXISTS files")
-c.execute("DROP TABLE IF EXISTS attempts")
+with app.app_context():
+    init_db()
 
-c.execute(
-    """
-    CREATE TABLE files (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT UNIQUE NOT NULL,
-        filename TEXT NOT NULL,
-        mimetype TEXT NOT NULL,
-        data BLOB NOT NULL,
-        uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-    """
-)
-
-c.execute(
-    """
-    CREATE TABLE attempts (
-        ip TEXT PRIMARY KEY,
-        count INTEGER NOT NULL DEFAULT 0,
-        last_attempt TEXT,
-        locked_until TEXT
-    )
-    """
-)
-
-c.execute("DELETE FROM attempts")
-
-conn.commit()
-conn.close()
-print("database.db initialized")
+print("database initialized")
