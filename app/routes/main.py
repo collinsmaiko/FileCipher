@@ -6,7 +6,7 @@ from flask import Blueprint, abort, current_app, flash, redirect, render_templat
 from werkzeug.utils import secure_filename
 
 from app.extensions import get_db
-from app.services.file_service import allowed_file, is_image_file, is_locked, normalize_code, update_attempts
+from app.services.file_service import is_image_file, is_locked, normalize_code, update_attempts
 
 
 main_bp = Blueprint("main", __name__)
@@ -29,8 +29,8 @@ def upload():
         return redirect(url_for("main.index"))
 
     filename = secure_filename(file_obj.filename)
-    if not allowed_file(filename):
-        flash("File type not allowed.")
+    if not filename:
+        flash("Invalid filename.")
         return redirect(url_for("main.index"))
 
     raw_code = (request.form.get("code") or "").strip()

@@ -12,7 +12,6 @@ def create_app(config_class=Config):
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.config.from_object(config_class)
 
-    os.makedirs(app.config["DOWNLOAD_FOLDER"], exist_ok=True)
     os.makedirs(app.config["MEDIA_FOLDER"], exist_ok=True)
 
     with app.app_context():
