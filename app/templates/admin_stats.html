@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="admin-wrapper">
+
+    <!-- ================== Header ================== -->
+    <div class="admin-header">
+        <h1>FileCipher Admin</h1>
+        <p class="admin-subtitle">Application usage overview</p>
+        <p class="admin-update">Last updated: {{ now | default("just now") }}</p>
+    </div>
+
+    <!-- ================== Stats Cards ================== -->
+    <div class="stats-grid">
+        <div class="stat-box">
+            <span class="stat-label">Total Uploads</span>
+            <h2>{{ total_uploads }}</h2>
+        </div>
+
+        <div class="stat-box">
+            <span class="stat-label">Failed Attempts</span>
+            <h2>{{ total_attempts }}</h2>
+        </div>
+
+        <div class="stat-box">
+            <span class="stat-label">Downloads</span>
+            <h2>{{ total_downloads }}</h2>
+        </div>
+    </div>
+
+    <!-- ================== Top IPs Table ================== -->
+    <div class="top-ips-container">
+        <!-- Files IPs -->
+        <div class="admin-card">
+            <h3>Top Active IP Addresses (Files)</h3>
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>IP Address</th>
+                        <th>Downloads</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if top_ips %}
+                        {% for ip, count in top_ips %}
+                        <tr>
+                            <td>{{ ip }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="2">No file downloads yet</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

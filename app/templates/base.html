@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>{% block title %}FileShare Pro{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+
+<body>
+    <div class="shell">
+        <header class="top-nav">
+            <div class="brand">FileCipher<span>Pro</span></div>
+            <nav class="nav-links">
+                <a href="{{ url_for('main.index') }}">Send</a>
+                <a href="{{ url_for('main.receive') }}">Receive</a>
+            </nav>
+        </header>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="flash">{{ messages[0] }}</div>
+        {% endif %}
+        {% endwith %}
+
+        <main class="main">
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="footer">
+            <p>Share any file securely between devices using one-time access codes.</p>
+        </footer>
+    </div>
+</body>
+
+</html>

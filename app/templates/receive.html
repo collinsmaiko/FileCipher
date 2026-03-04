@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Receive file · FileShare Pro{% endblock %}
+
+{% block content %}
+<section class="card">
+    <h1>Receive a file</h1>
+    <p class="sub">
+        Enter the access code you were given. You have 10 attempts per hour before a 1‑hour lock.
+    </p>
+
+    <!-- Form where user inputs their code -->
+    <form method="post" class="form">
+        <label for="code">Access code</label>
+        <input type="text" id="code" name="code" required placeholder="Enter your code here">
+        <button type="submit" class="btn-primary">Check code</button>
+    </form>
+
+    {% if file %}
+    <!-- Shown only when a valid code was entered -->
+    <div class="file-preview">
+        <h2>Code is valid</h2>
+        <p class="filename">{{ file.filename }}</p>
+        <a href="{{ url_for('main.download', file_id=file.id, code=file.code) }}" class="btn-primary">
+            Download to this device
+        </a>
+    </div>
+    {% endif %}
+
+    <p class="hint">
+        Open this page on any device, enter the code, and download the file directly to that device.
+    </p>
+</section>
+{% endblock %}
