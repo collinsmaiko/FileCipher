@@ -12,6 +12,13 @@ def allowed_file(filename: str) -> bool:
     return ext in current_app.config["ALLOWED_EXTENSIONS"]
 
 
+def is_image_file(filename: str) -> bool:
+    if "." not in filename:
+        return False
+    ext = filename.rsplit(".", 1)[1].lower()
+    return ext in current_app.config["IMAGE_EXTENSIONS"]
+
+
 def normalize_code(raw: str) -> str:
     alphabet = current_app.config["CODE_ALPHABET"]
     return "".join(ch for ch in raw.upper() if ch in alphabet)

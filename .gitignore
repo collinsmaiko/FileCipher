@@ -3,5 +3,7 @@ venv/
 __pycache__/
 *.pyc
 downloads/
+app/media/*
+!app/media/.gitkeep
 database.db
 .env

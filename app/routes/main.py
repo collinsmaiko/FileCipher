@@ -1,10 +1,12 @@
+import os
+import uuid
 from io import BytesIO
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
 from app.extensions import get_db
-from app.services.file_service import allowed_file, is_locked, normalize_code, update_attempts
+from app.services.file_service import allowed_file, is_image_file, is_locked, normalize_code, update_attempts
 
 
 main_bp = Blueprint("main", __name__)
@@ -43,6 +45,18 @@ def upload():
         flash("File empty or too large.")
         return redirect(url_for("main.index"))
 
+    stored_path = None
+    db_data = file_bytes
+    if is_image_file(filename):
+        ext = filename.rsplit(".", 1)[1].lower()
+        stored_name = f"{uuid.uuid4().hex}.{ext}"
+        target_path = os.path.join(current_app.config["MEDIA_FOLDER"], stored_name)
+        with open(target_path, "wb") as media_file:
+            media_file.write(file_bytes)
+        stored_path = stored_name
+        # Keep BLOB non-null for backward-compatible schema.
+        db_data = b""
+
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute("SELECT 1 FROM files WHERE code = ?", (user_code,))
@@ -51,8 +65,8 @@ def upload():
             return redirect(url_for("main.index"))
 
         cur.execute(
-            "INSERT INTO files (code, filename, mimetype, data) VALUES (?, ?, ?, ?)",
-            (user_code, filename, file_obj.mimetype or "application/octet-stream", file_bytes),
+            "INSERT INTO files (code, filename, mimetype, data, storage_path) VALUES (?, ?, ?, ?, ?)",
+            (user_code, filename, file_obj.mimetype or "application/octet-stream", db_data, stored_path),
         )
         conn.commit()
 
@@ -97,7 +111,7 @@ def download(file_id, code):
 
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT code, filename, mimetype, data FROM files WHERE id = ?", (file_id,))
+        cur.execute("SELECT code, filename, mimetype, data, storage_path FROM files WHERE id = ?", (file_id,))
         row = cur.fetchone()
 
         if not row:
@@ -110,11 +124,25 @@ def download(file_id, code):
         file_data = row["data"]
         filename = row["filename"]
         mimetype = row["mimetype"]
+        storage_path = row["storage_path"]
 
         cur.execute("INSERT INTO downloads (file_id, ip) VALUES (?, ?)", (file_id, ip))
         conn.commit()
 
     update_attempts(ip, success=True)
+
+    if storage_path:
+        media_path = os.path.join(current_app.config["MEDIA_FOLDER"], storage_path)
+        if not os.path.exists(media_path):
+            abort(404, "Stored media file not found.")
+        return send_file(
+            media_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype=mimetype,
+            max_age=0,
+            conditional=True,
+        )
 
     if not file_data:
         abort(500, "File data missing.")

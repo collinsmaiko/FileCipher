@@ -21,10 +21,17 @@ def init_db():
                 filename TEXT NOT NULL,
                 mimetype TEXT NOT NULL,
                 data BLOB NOT NULL,
+                storage_path TEXT,
                 uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+
+        # Backfill schema for older databases created before storage_path existed.
+        cur.execute("PRAGMA table_info(files)")
+        columns = {row["name"] for row in cur.fetchall()}
+        if "storage_path" not in columns:
+            cur.execute("ALTER TABLE files ADD COLUMN storage_path TEXT")
 
         cur.execute(
             """
